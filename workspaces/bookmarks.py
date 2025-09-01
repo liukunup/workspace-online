@@ -20,13 +20,12 @@ import logging
 import json
 import csv
 
-# 设置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('bookmark_converter.log', encoding='utf-8')
+        logging.FileHandler('bookmarks.log', encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -34,16 +33,16 @@ logger = logging.getLogger(__name__)
 
 class BookmarkDecoder:
     """书签解码器 - 负责解析HTML书签文件"""
-    
+
     def __init__(self):
         self.total_bookmarks = 0
         self.total_folders = 0
         self.processed_files = 0
-    
+
     def decode(self, html_content: str) -> List[Dict[str, Any]]:
         """
         解码HTML内容为书签数据
-        
+
         Args:
             html_content: HTML书签文件内容
             
@@ -116,17 +115,17 @@ class BookmarkDecoder:
         bookmarks = []
         
         for item in dl_element.find_all(recursive=False):
-            if item.name == 'h3':  # 文件夹
+            if item.name == 'H3':  # 文件夹
                 folder_name = item.get_text(strip=True)
                 self.total_folders += 1
                 
                 new_path = f"{current_path} > {folder_name}" if current_path else folder_name
-                next_dl = item.find_next_sibling('dl')
+                next_dl = item.find_next_sibling('DL')
                 
                 if next_dl:
                     bookmarks.extend(self._parse_folder_structure(next_dl, new_path))
                     
-            elif item.name == 'a':  # 书签
+            elif item.name == 'A':  # 书签
                 bookmark = self._parse_bookmark(item, current_path)
                 if bookmark:
                     bookmarks.append(bookmark)
@@ -148,7 +147,7 @@ class BookmarkDecoder:
         """
         try:
             title = a_element.get_text(strip=True) or "无标题"
-            url = a_element.get('href', '').strip()
+            url = a_element.get('HREF', '').strip()
             
             return {
                 'title': title,
@@ -392,67 +391,64 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         epilog="""
 示例:
   # 转换为Excel格式(默认)
-  python bookmark_converter.py bookmarks.html
+  python bookmarks.py bookmarks.html
   
   # 指定输出格式和文件
-  python bookmark_converter.py bookmarks.html -f csv -o output.csv
+  python bookmarks.py bookmarks.html -f csv -o output.csv
   
   # 转换为JSON并显示详细信息
-  python bookmark_converter.py bookmarks.html -f json -v
+  python bookmarks.py bookmarks.html -f json -v
   
   # 批量转换多个文件
-  python bookmark_converter.py *.html -f excel
+  python bookmarks.py *.html -f excel
   
   # 仅显示统计信息
-  python bookmark_converter.py bookmarks.html -f stdout --stats-only
+  python bookmarks.py bookmarks.html -f stdout --stats-only
         """
     )
-    
-    # 必需参数
+
     parser.add_argument(
         'input_files', 
         nargs='+',
         help='输入的HTML书签文件路径(支持通配符)'
     )
-    
-    # 输出选项
+
     parser.add_argument(
         '-f', '--format',
         choices=BookmarkEncoder.get_available_formats(),
         default='excel',
         help='输出格式 (默认: excel)'
     )
-    
+
     parser.add_argument(
         '-o', '--output',
         help='输出文件路径(对于多文件处理，此参数作为前缀使用)'
     )
-    
-    # 功能选项
+
     parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='显示详细日志信息'
     )
-    
+
     parser.add_argument(
         '--stats-only',
         action='store_true',
         help='仅显示统计信息，不生成输出文件'
     )
-    
+
     parser.add_argument(
         '--no-backup',
         action='store_true',
         help='不创建备份文件'
     )
-    
+
     parser.add_argument(
         '--encoding',
         default='utf-8',
         help='输入文件编码 (默认: utf-8)'
     )
-    
+
     return parser
 
 
@@ -479,7 +475,7 @@ def main():
             if output_file and len(args.input_files) > 1:
                 base_name = os.path.splitext(os.path.basename(input_file))[0]
                 output_file = f"{args.output}_{base_name}"
-            
+
             # 执行转换
             if args.stats_only:
                 bookmarks = converter.decoder.decode_file(input_file)
@@ -517,5 +513,5 @@ if __name__ == "__main__":
     # 示例用法
     # converter = ChromeBookmarkConverter()
     # converter.convert("bookmarks.html", "excel", "output.xlsx")
-    
+
     sys.exit(main())
