@@ -4,7 +4,7 @@
 """
 Chrome 书签转换工具
 
-功能: 将 Chrome 浏览器导出的 HTML 格式书签转换为多种格式(Excel/CSV/JSON)
+功能: 将 Chrome 浏览器导出的 HTML 格式书签转换为多种格式(Excel/CSV/JSON/YAML)
 作者: Liu Kun
 日期: 2025/09/01
 版本: 2.0
@@ -17,8 +17,9 @@ import sys
 import argparse
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable
-import json
 import csv
+import json
+import yaml
 import logging
 
 logging.basicConfig(
@@ -339,12 +340,80 @@ def _encode_stdout(bookmarks: List[Dict], output_file: str, **kwargs) -> None:
 
     print(f"\n总计: {len(bookmarks)} 个书签")
 
+def _encode_flare(bookmarks: List[Dict], output_file: str, **kwargs) -> None:
+    """ Flare 编码器 """
+
+    if not output_file:
+        output_file = f"bookmarks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yml"
+    elif not output_file.endswith(('.yml', '.yaml')):
+        output_file += '.yml'
+
+    # 自动创建分类
+    folders = sorted(set(bookmark['folder'] for bookmark in bookmarks if bookmark['folder']))
+    categories = []
+
+    for i, folder in enumerate(folders, 1):
+        categories.append({
+            'id': i,
+            'title': folder
+        })
+
+    # 创建 文件夹 到 ID 的映射
+    folder_to_id = {folder: i for i, folder in enumerate(folders, 1)}
+
+    # 创建链接
+    links = []
+    for bookmark in bookmarks:
+        link = {
+            'name': bookmark['title'],
+            'link': bookmark['url']
+        }
+
+        # 添加图标（排除base64编码的图片数据）
+        icon = bookmark.get('icon', '')
+        if icon and not icon.startswith('data:image/'):
+            link['icon'] = icon
+        
+        # 添加分类
+        folder = bookmark['folder']
+        if folder and folder in folder_to_id:
+            link['category'] = folder_to_id[folder]
+
+        links.append(link)
+
+    # 构建 YAML 数据
+    data = {
+        'categories': categories,
+        'links': links
+    }
+
+    try:
+        with open(output_file, 'w', encoding='utf-8') as file:
+            yaml.dump(
+                data,
+                file,
+                allow_unicode=True,
+                sort_keys=False,
+                default_flow_style=False,
+                indent=2,
+                width=100  # 控制行宽
+            )
+
+        print(f"✅ 成功导出 {len(bookmarks)} 个书签到: {output_file}")
+        print(f"📁 分类数量: {len(categories)}")
+        print(f"🔗 链接数量: {len(links)}")
+
+    except Exception as e:
+        print(f"❌ 保存文件时出错: {e}")
+        raise
+
+
 # 注册内置格式
 BookmarkEncoder.register_format('excel', _encode_excel)
 BookmarkEncoder.register_format('csv', _encode_csv)
 BookmarkEncoder.register_format('json', _encode_json)
 BookmarkEncoder.register_format('stdout', _encode_stdout)
-
+BookmarkEncoder.register_format('flare', _encode_flare)
 
 class ChromeBookmarkConverter:
     """ Chrome 书签转换器 - 协调解码和编码过程 """

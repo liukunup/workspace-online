@@ -4,7 +4,9 @@
 
 ✈ 导航到 [Code](bookmark/run.py)
 
-支持将 Chrome 导出的 HTML 书签数据进行解析，并转换成各种不同的格式
+- 支持将 Chrome 导出的 HTML 书签数据进行解析，并转换成各种不同的格式
+
+- 支持 [Flare](https://github.com/soulteary/docker-flare) 格式
 
 ```plaintext
 # 转换为Excel格式(默认)
