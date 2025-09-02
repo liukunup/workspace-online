@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class BookmarkDecoder:
-    """书签解码器 - 负责解析HTML书签文件"""
+    """ 书签解码器 - 负责解析 HTML 格式的书签文件 """
 
     def __init__(self):
         self.total_bookmarks = 0
@@ -41,51 +41,50 @@ class BookmarkDecoder:
 
     def decode(self, html_content: str) -> List[Dict[str, Any]]:
         """
-        解码HTML内容为书签数据
+        解析 HTML 内容为书签数据
 
         Args:
-            html_content: HTML书签文件内容
-            
+            html_content: HTML 文件内容
+
         Returns:
-            List[Dict]: 书签数据列表
+            List[Dict]: 书签数据
         """
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
-            root_dl = soup.find('dl')
-            
-            if not root_dl:
-                logger.warning("未找到有效的书签数据")
+            root = soup.find('dl')
+
+            if not root:
+                logger.warning("未找到有效的根标签")
                 return []
-            
-            return self._parse_folder_structure(root_dl)
-            
+
+            return self._parse_folder(root)
+
         except Exception as e:
-            logger.error(f"解码HTML内容时出错: {e}")
+            logger.error(f"解码 HTML 内容时出错: {e}")
             raise
-    
+
     def decode_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
-        从文件解码书签数据
-        
+        从 HTML 文件中解码书签数据
+
         Args:
-            file_path: HTML文件路径
-            
+            file_path: HTML 文件路径
+
         Returns:
-            List[Dict]: 书签数据列表
+            List[Dict]: 书签数据
         """
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"文件不存在: {file_path}")
-        
+            raise FileNotFoundError(f"文件 {file_path} 不存在")
+
         try:
-            # 尝试多种编码
             encodings = ['utf-8', 'gbk', 'latin-1', 'iso-8859-1']
             html_content = None
-            
+
             for encoding in encodings:
                 try:
                     with open(file_path, 'r', encoding=encoding) as file:
                         html_content = file.read()
-                    logger.info(f"成功使用编码: {encoding}")
+                    logger.info(f"使用编码: {encoding}")
                     break
                 except UnicodeDecodeError:
                     continue
@@ -95,76 +94,76 @@ class BookmarkDecoder:
 
             self.processed_files += 1
             return self.decode(html_content)
-            
+
         except Exception as e:
             logger.error(f"读取文件时出错: {e}")
             raise
-    
-    def _parse_folder_structure(self, dl_element: BeautifulSoup, 
-                               current_path: str = "") -> List[Dict]:
+
+    def _parse_folder(self, element: BeautifulSoup) -> List[Dict]:
         """
-        递归解析文件夹结构
-        
+        解析文件夹结构
+
         Args:
-            dl_element: DL元素对象
-            current_path: 当前文件夹路径
-            
+            element: 当前元素对象
+
         Returns:
-            List[Dict]: 书签数据列表
+            List[Dict]: 书签数据
         """
         bookmarks = []
-        
-        for item in dl_element.find_all(recursive=False):
-            if item.name == 'H3':  # 文件夹
-                folder_name = item.get_text(strip=True)
-                self.total_folders += 1
-                
-                new_path = f"{current_path} > {folder_name}" if current_path else folder_name
-                next_dl = item.find_next_sibling('DL')
-                
-                if next_dl:
-                    bookmarks.extend(self._parse_folder_structure(next_dl, new_path))
-                    
-            elif item.name == 'A':  # 书签
-                bookmark = self._parse_bookmark(item, current_path)
-                if bookmark:
-                    bookmarks.append(bookmark)
-                    self.total_bookmarks += 1
-        
+
+        # 查找所有的 <a> 标签(书签链接)
+        for link in element.find_all('a'):
+
+            # 查找父文件夹
+            folder_path = []
+            parent = link.find_parent('dl')
+            while parent:
+                folder_tag = parent.find_previous_sibling('h3')
+                if folder_tag and folder_tag.string:
+                    folder_path.insert(0, folder_tag.string)
+                parent = parent.find_parent('dl')
+            # 组装文件夹路径
+            folder = ' > '.join(folder_path) if folder_path else '书签栏'
+
+            # 处理书签链接
+            bookmark = self._parse_bookmark(link, folder)
+            if bookmark:
+                bookmarks.append(bookmark)
+                self.total_bookmarks += 1
+
         return bookmarks
-    
-    def _parse_bookmark(self, a_element: BeautifulSoup, 
-                       folder_path: str) -> Optional[Dict]:
+
+    def _parse_bookmark(self, a_element: BeautifulSoup, folder: str) -> Optional[Dict]:
         """
         解析单个书签元素
-        
+
         Args:
             a_element: A标签元素
-            folder_path: 文件夹路径
-            
+            folder: 文件夹路径
+
         Returns:
             Optional[Dict]: 书签数据字典或None
         """
         try:
             title = a_element.get_text(strip=True) or "无标题"
-            url = a_element.get('HREF', '').strip()
-            
+            url = a_element.get('href', '').strip()
+
             return {
                 'title': title,
                 'url': url,
                 'domain': self._extract_domain(url),
-                'folder_path': self._clean_folder_path(folder_path),
+                'folder_path': self._clean_folder_path(folder),
                 'add_date': self._convert_timestamp(a_element.get('add_date', '')),
                 'last_modified': self._convert_timestamp(a_element.get('last_modified', '')),
                 'has_icon': bool(a_element.get('icon')),
                 'bookmark_type': self._get_bookmark_type(url),
                 'icon_data': a_element.get('icon', '')
             }
-            
+
         except Exception as e:
             logger.warning(f"解析书签时出错: {e}")
             return None
-    
+
     @staticmethod
     def _clean_folder_path(path: str) -> str:
         """清理文件夹路径"""
